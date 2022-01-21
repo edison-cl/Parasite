@@ -49,36 +49,42 @@ pub fn listen_leader_beat(node: web::Data<Node>) {
     }
 }
 
-pub fn run_test() {
-    let node_web_data = web::Data::new(Node::new());
-    {
-        let node = node_web_data.clone();
-        std::thread::spawn(|| listen_leader_beat(node));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    pub fn run_test() {
+        let node_web_data = web::Data::new(Node::new());
+        {
+            let node = node_web_data.clone();
+            std::thread::spawn(|| listen_leader_beat(node));
+        }
+        thread::sleep(time::Duration::from_secs(2));
+        {
+            let node = node_web_data.clone();
+            let mut role = node.ROLE.lock().unwrap();
+            *role = String::from("LEADER");
+        }
+        thread::sleep(time::Duration::from_secs(2));
+        {
+            let node = node_web_data.clone();
+            let mut role = node.ROLE.lock().unwrap();
+            *role = String::from("FOLLOWER");
+        }
+        {
+            let node = node_web_data.clone();
+            println!("start twice listen");
+            std::thread::spawn(|| listen_leader_beat(node));
+        }
+        thread::sleep(time::Duration::from_secs(2));
+        {
+            let node = node_web_data.clone();
+            let mut role = node.ROLE.lock().unwrap();
+            *role = String::from("LEADER");
+        }
+        thread::sleep(time::Duration::from_secs(5));
+        // h.join().unwrap();
+        // h2.join().unwrap();
     }
-    thread::sleep(time::Duration::from_secs(2));
-    {
-        let node = node_web_data.clone();
-        let mut role = node.ROLE.lock().unwrap();
-        *role = String::from("LEADER");
-    }
-    thread::sleep(time::Duration::from_secs(2));
-    {
-        let node = node_web_data.clone();
-        let mut role = node.ROLE.lock().unwrap();
-        *role = String::from("FOLLOWER");
-    }
-    {
-        let node = node_web_data.clone();
-        println!("start twice listen");
-        std::thread::spawn(|| listen_leader_beat(node));
-    }
-    thread::sleep(time::Duration::from_secs(2));
-    {
-        let node = node_web_data.clone();
-        let mut role = node.ROLE.lock().unwrap();
-        *role = String::from("LEADER");
-    }
-    thread::sleep(time::Duration::from_secs(5));
-    // h.join().unwrap();
-    // h2.join().unwrap();
 }
+
+
