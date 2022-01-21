@@ -1,0 +1,7 @@
+1. raft leader 心跳 
+1-1. test (1) beat on code
+
+2. setup actix-web
+2-1. check (1) beat on http
+
+3. raft change role  follower => leader => follower => leader => stop
