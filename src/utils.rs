@@ -19,7 +19,7 @@ pub fn md5<S: Into<String>>(input: S) -> String {
 pub fn parse_args()-> Config {
     let args: Vec<String> = std::env::args().collect();
     let args = Rc::new(args);
-    let mut port = String::from("9527");
+    let mut port = String::from("8000");
     for (index, item) in args.iter().enumerate() {
         let argss = Rc::clone(&args);
         match item.as_str() {

@@ -21,14 +21,14 @@ mod utils;
 
 pub struct Node {
     // FOLLOWER CANDIDATE LEADER
-    pub id:String,
-    pub address:String,
+    pub id: String,
+    pub address: String,
     pub role: Mutex<String>,
     pub wait_for_leader: i64,
     pub last_leader_beat: Mutex<i64>,
     pub term: Mutex<i64>,
-    pub state:Mutex<String>,
-    pub version:Mutex<i64>
+    pub state: Mutex<String>,
+    pub version: Mutex<i64>,
 }
 
 impl Node {
@@ -39,24 +39,30 @@ impl Node {
                 let port = utils::parse_args().port;
                 Node {
                     id,
-                    address: format!("{}:{}",ip,port),
+                    address: format!("{}:{}", ip, port),
                     role: Mutex::new(String::from("follower")),
                     wait_for_leader: rand::thread_rng().gen_range(300..700),
                     last_leader_beat: Mutex::new(Local::now().timestamp()),
                     term: Mutex::new(0),
-                    version:Mutex::new(0),
-                    state:Mutex::new(String::from("on")),
+                    version: Mutex::new(0),
+                    state: Mutex::new(String::from("on")),
                 }
-            },
+            }
             None => panic!("cannot get uid"),
         }
     }
 }
 
-pub fn node_data() -> &'static Mutex<Value> {
-    static INSTANCE: OnceCell<Mutex<Value>> = OnceCell::new();
-    INSTANCE.get_or_init(|| {
-        let mut f = fs::OpenOptions::new()
+pub fn node_struct() -> &'static Node {
+    static nodeJson: OnceCell<Node> = OnceCell::new();
+    nodeJson.get_or_init(|| Node::new())
+}
+
+pub fn cluster_json() -> &'static Mutex<Value> {
+    static clusterJson: OnceCell<Mutex<Value>> = OnceCell::new();
+    clusterJson.get_or_init(|| {
+        println!("clusterJson init");
+        let f = fs::OpenOptions::new()
             .read(true)
             .open(&config::global_data::node_path())
             .unwrap();
@@ -64,23 +70,31 @@ pub fn node_data() -> &'static Mutex<Value> {
     })
 }
 
-pub fn listen_leader_beat(node: web::Data<Node>) {
-    println!("begin listen, role {}", node.role.lock().unwrap());
+pub fn listen_leader_beat() {
     loop {
-        if *node.role.lock().unwrap() == String::from("follower") {
-        } else if *node.role.lock().unwrap() == String::from("leader") {
-            break;
-        } else if *node.role.lock().unwrap() == String::from("candidate") {
-            break;
+        // println!("{}",cluster_json().lock().unwrap().to_string());
+        let node = node_struct();
+        let id = utils::id_generator().unwrap();
+        let role = node.role.lock().unwrap().to_string();
+        if role == String::from("follower") {
+        } else if role == String::from("leader") {
+            // break;
+        } else if role == String::from("candidate") {
+            // break;
         }
         let now = Local::now().timestamp();
-        let last_beat = node.last_leader_beat.lock().unwrap();
+        let last_beat = node.last_leader_beat.lock().unwrap().to_owned();
         let wait_for_leader = node.wait_for_leader;
-        if now > *last_beat + wait_for_leader / 1000 {
+        if now > last_beat + wait_for_leader / 1000 {
             // TIMEOUT
-            println!("timeout");
+            *node.role.lock().unwrap() = "candidate".to_string();
+            edit::role(id.as_str(), "candidate");
+            println!("leader beat timeout");
+        } else {
+            println!("get leader beat");
         }
-        thread::sleep(time::Duration::from_millis(150));
+        drop(node);
+        thread::sleep(time::Duration::from_millis(300));
     }
 }
 
@@ -94,17 +108,17 @@ pub fn cluster_init() {
         let node_local: Value = json!({
             "address" : format!("{}:{}",ip,config.port),
             "state" : "on",
-            "role" : "folower"
+            "role" : "follower"
         });
         let mut data = json!({});
         data.as_object_mut().unwrap().insert(id, node_local);
         f.write(format!("{}", data.to_string()).as_bytes()).unwrap();
-        node_data().lock().unwrap();
+        cluster_json();
     }
 }
 
 pub fn cluster_add(id: &str, address: &str, state: &str, role: &str) {
-    let mut cluster_json = node_data().lock().unwrap();
+    let mut cluster_json = cluster_json().lock().unwrap();
     let node_new = json!({
         "address" : address,
         "state" : state,
@@ -119,14 +133,14 @@ pub fn cluster_add(id: &str, address: &str, state: &str, role: &str) {
 }
 
 pub fn cluster_del(id: &str) {
-    let mut cluster_json = node_data().lock().unwrap();
+    let mut cluster_json = cluster_json().lock().unwrap();
     cluster_json.as_object_mut().unwrap().remove(id);
 }
 
 pub fn cluster_input_device() {
     let mut last_md5 = String::from("");
     loop {
-        let cluster_json = node_data().lock().unwrap();
+        let cluster_json = cluster_json().lock().unwrap();
         let content = format!("{}", cluster_json.to_string());
         let this_md5 = utils::md5(&content);
         if this_md5 != last_md5 {
@@ -138,6 +152,7 @@ pub fn cluster_input_device() {
                 .unwrap();
             f.write_all(content.as_bytes()).unwrap();
         }
+        drop(cluster_json);
         thread::sleep(time::Duration::from_millis(500));
     }
 }
@@ -148,55 +163,17 @@ pub mod edit {
         if state != "del" && state != "on" && state != "off" {
             panic!("invaid argusment{{state}}: {}", &state)
         }
-        let mut cluster_json = node_data().lock().unwrap();
+        let mut cluster_json = cluster_json().lock().unwrap();
         cluster_json.as_object_mut().unwrap()[id]["state"] = Value::String(state.to_string());
     }
     pub fn role(id: &str, role: &str) {
         if role != "follower" && role != "leader" && role != "candidate" {
             panic!("invaid argusment{{role}}: {}", &role)
         }
-        let mut cluster_json = node_data().lock().unwrap();
+        let mut cluster_json = cluster_json().lock().unwrap();
         cluster_json.as_object_mut().unwrap()[id]["role"] = Value::String(role.to_string());
+        println!("listen time out, role change candidate. {} - {}",cluster_json.as_object_mut().unwrap()[id]["role"],role);
     }
 }
 
-pub fn sync_node_information_v1(){
-
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    pub fn run_test() {
-        let node_web_data = web::Data::new(Node::new());
-        {
-            let node = node_web_data.clone();
-            std::thread::spawn(|| listen_leader_beat(node));
-        }
-        thread::sleep(time::Duration::from_secs(2));
-        {
-            let node = node_web_data.clone();
-            let mut role = node.role.lock().unwrap();
-            *role = String::from("LEADER");
-        }
-        thread::sleep(time::Duration::from_secs(2));
-        {
-            let node = node_web_data.clone();
-            let mut role = node.role.lock().unwrap();
-            *role = String::from("FOLLOWER");
-        }
-        {
-            let node = node_web_data.clone();
-            println!("start twice listen");
-            std::thread::spawn(|| listen_leader_beat(node));
-        }
-        thread::sleep(time::Duration::from_secs(2));
-        {
-            let node = node_web_data.clone();
-            let mut role = node.role.lock().unwrap();
-            *role = String::from("LEADER");
-        }
-        thread::sleep(time::Duration::from_secs(5));
-        // h.join().unwrap();
-        // h2.join().unwrap();
-    }
-}
+pub fn sync_node_information_v1() {}

@@ -1,6 +1,8 @@
 use actix_web::{web, HttpResponse};
-use chrono::Local;
 use serde::{Deserialize, Serialize};
+use chrono::Local;
+
+use self::cluster::Node;
 
 #[path = "../cluster.rs" ]
 pub mod cluster;
@@ -17,9 +19,8 @@ pub async fn health_check_handler() -> HttpResponse {
     HttpResponse::Ok().json(Alive{message:String::from("alive"),time:Local::now().timestamp()})
 }
 
-pub async fn leader_beat(web_data:web::Data<cluster::Node>) -> HttpResponse {
-    let mut last_beat = web_data.last_leader_beat.lock().unwrap();
-    *last_beat = Local::now().timestamp();
+pub async fn leader_beat() -> HttpResponse {
+    *cluster::node_struct().last_leader_beat.lock().unwrap() = Local::now().timestamp();
     HttpResponse::Ok().finish()
 }
 
