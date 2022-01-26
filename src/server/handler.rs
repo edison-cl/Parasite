@@ -2,8 +2,8 @@ use actix_web::{web, HttpResponse};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
-#[path = "../raft.rs" ]
-pub mod raft;
+#[path = "../cluster.rs" ]
+pub mod cluster;
 #[path = "./state.rs" ]
 pub mod state;
 
@@ -17,8 +17,8 @@ pub async fn health_check_handler() -> HttpResponse {
     HttpResponse::Ok().json(Alive{message:String::from("alive"),time:Local::now().timestamp()})
 }
 
-pub async fn leader_beat(web_data:web::Data<raft::Node>) -> HttpResponse {
-    let mut last_beat = web_data.LAST_BEAT.lock().unwrap();
+pub async fn leader_beat(web_data:web::Data<cluster::Node>) -> HttpResponse {
+    let mut last_beat = web_data.last_leader_beat.lock().unwrap();
     *last_beat = Local::now().timestamp();
     HttpResponse::Ok().finish()
 }

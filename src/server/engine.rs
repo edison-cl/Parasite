@@ -1,12 +1,13 @@
 use actix_web::{web, App, HttpServer,HttpResponse};
-use std::io;
+use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 use chrono::Local;
 
+
 #[path = "handler.rs"]
 mod handler;
-use handler::{raft,state};
+use handler::{cluster,state};
 #[path = "router.rs"]
 mod router;
 // 要命!!!!
@@ -20,20 +21,19 @@ mod utils;
 
 pub async fn server_run() -> io::Result<()>{
     let config = utils::parse_args();
-    
-    let node_orgin = raft::Node::new();
-    let node_web_data = web::Data::new(node_orgin);
-    let node_web_data_clone = node_web_data.clone();
-    
-    std::thread::spawn(|| raft::listen_leader_beat(node_web_data));
-   
+    let node_web_data = web::Data::new(cluster::Node::new());
+    {
+        let node = node_web_data.clone();
+        std::thread::spawn(|| cluster::listen_leader_beat(node));
+    }
+    let node = node_web_data.clone();
     let shared_data = web::Data::new(state::AppState {
         count: Mutex::new(0)
     });
     let app =  move || {
         App::new()
             .app_data(shared_data.clone())
-            .app_data(node_web_data_clone.clone())
+            .app_data(node.clone())
             .configure(router::general_routes)
             .configure(router::test_router)
     };
@@ -42,3 +42,4 @@ pub async fn server_run() -> io::Result<()>{
         .run()
         .await
 }
+

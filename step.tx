@@ -5,3 +5,8 @@
 2-1. check (1) beat on http
 
 3. raft change role  follower => leader => follower => leader => stop
+
+4.cluster_information_manage
+  -- add/edit
+  -- remove
+  -- get
