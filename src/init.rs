@@ -1,10 +1,12 @@
-use std::thread;
-#[path = "cluster.rs"]
-mod cluster;
+use actix_rt::spawn;
+use super::*;
 
-pub fn prepare(){
-    cluster::cluster_init();
-    thread::spawn(||cluster::cluster_input_device());
-    thread::spawn(||cluster::listen_leader_beat());
+pub async fn prepare(){
+    super::cluster::cluster_init();
+    super::command::command_parse();
+    
     // thread::spawn(||cluster::cluster_input_device());
+    // thread::spawn(||cluster::listen_leader_beat());
+    spawn(cluster::cluster_input_device());
+    spawn(cluster::listen_leader_beat());
 }

@@ -16,4 +16,11 @@ regex = "1.5"
 rust-crypto = "^0.2"
 json="*"
 once_cell = "*"
-reqwest = { version = "0.11", features = ["json"] }
+
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+async-std = { version = "1.2.0", features = ["attributes"] }
+
+
+
+[profile.release]
+lto = true
